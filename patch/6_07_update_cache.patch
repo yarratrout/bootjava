@@ -1,0 +1,82 @@
+Index: src/main/java/ru/javaops/bootjava/repository/UserRepository.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/bootjava/repository/UserRepository.java b/src/main/java/ru/javaops/bootjava/repository/UserRepository.java
+--- a/src/main/java/ru/javaops/bootjava/repository/UserRepository.java	(revision b9b8521bf02499951ad568bab8d7d32ad9ca0962)
++++ b/src/main/java/ru/javaops/bootjava/repository/UserRepository.java	(date 1618523204614)
+@@ -1,10 +1,13 @@
+ package ru.javaops.bootjava.repository;
+ 
+ import io.swagger.v3.oas.annotations.tags.Tag;
++import org.springframework.cache.annotation.CacheEvict;
++import org.springframework.cache.annotation.CachePut;
+ import org.springframework.cache.annotation.Cacheable;
+ import org.springframework.data.domain.Page;
+ import org.springframework.data.domain.Pageable;
+ import org.springframework.data.jpa.repository.JpaRepository;
++import org.springframework.data.jpa.repository.Modifying;
+ import org.springframework.data.jpa.repository.Query;
+ import org.springframework.data.rest.core.annotation.RestResource;
+ import org.springframework.transaction.annotation.Transactional;
+@@ -23,4 +26,22 @@
+ 
+     @RestResource(rel = "by-lastname", path = "by-lastname")
+     Page<User> findByLastNameContainingIgnoreCase(String lastName, Pageable page);
++
++    @Override
++    @Modifying
++    @Transactional
++    @CachePut(value = "users", key = "#user.email")
++    User save(User user);
++
++    @Override
++    @Modifying
++    @Transactional
++    @CacheEvict(value = "users", key = "#user.email")
++    void delete(User user);
++
++    @Override
++    @Modifying
++    @Transactional
++    @CacheEvict(value = "users", allEntries = true)
++    void deleteById(Integer integer);
+ }
+\ No newline at end of file
+Index: src/test/java/ru/javaops/bootjava/web/AbstractControllerTest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/bootjava/web/AbstractControllerTest.java b/src/test/java/ru/javaops/bootjava/web/AbstractControllerTest.java
+--- a/src/test/java/ru/javaops/bootjava/web/AbstractControllerTest.java	(revision b9b8521bf02499951ad568bab8d7d32ad9ca0962)
++++ b/src/test/java/ru/javaops/bootjava/web/AbstractControllerTest.java	(date 1618523096769)
+@@ -3,6 +3,7 @@
+ import org.springframework.beans.factory.annotation.Autowired;
+ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+ import org.springframework.boot.test.context.SpringBootTest;
++import org.springframework.test.context.ActiveProfiles;
+ import org.springframework.test.web.servlet.MockMvc;
+ import org.springframework.test.web.servlet.ResultActions;
+ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+@@ -12,6 +13,7 @@
+ @SpringBootTest
+ @Transactional
+ @AutoConfigureMockMvc
++@ActiveProfiles("test")
+ //https://docs.spring.io/spring-boot/docs/current/reference/html/spring-boot-features.html#boot-features-testing-spring-boot-applications-testing-with-mock-environment
+ public abstract class AbstractControllerTest {
+ 
+Index: src/test/resources/application-test.yaml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/resources/application-test.yaml b/src/test/resources/application-test.yaml
+new file mode 100644
+--- /dev/null	(date 1618522947525)
++++ b/src/test/resources/application-test.yaml	(date 1618522947525)
+@@ -0,0 +1,1 @@
++spring.cache.type: none
+\ No newline at end of file

@@ -1,0 +1,168 @@
+Index: src/main/java/ru/javaops/bootjava/web/error/GlobalExceptionHandler.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/bootjava/web/error/GlobalExceptionHandler.java b/src/main/java/ru/javaops/bootjava/web/error/GlobalExceptionHandler.java
+--- a/src/main/java/ru/javaops/bootjava/web/error/GlobalExceptionHandler.java	(revision 57c07cf5bf63765cb56b5649404f8b8c3628b583)
++++ b/src/main/java/ru/javaops/bootjava/web/error/GlobalExceptionHandler.java	(date 1618249181223)
+@@ -1,7 +1,9 @@
+ package ru.javaops.bootjava.web.error;
+ 
+ import lombok.AllArgsConstructor;
++import lombok.extern.slf4j.Slf4j;
+ import org.springframework.boot.web.servlet.error.ErrorAttributes;
++import org.springframework.http.HttpHeaders;
+ import org.springframework.http.HttpStatus;
+ import org.springframework.http.ResponseEntity;
+ import org.springframework.web.bind.annotation.ExceptionHandler;
+@@ -14,15 +16,23 @@
+ 
+ @RestControllerAdvice
+ @AllArgsConstructor
++@Slf4j
+ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
+     private final ErrorAttributes errorAttributes;
+ 
+     @ExceptionHandler(AppException.class)
+     public ResponseEntity<Map<String, Object>> appException(AppException ex, WebRequest request) {
++        log.error("Application Exception", ex);
+         Map<String, Object> body = errorAttributes.getErrorAttributes(request, ex.getOptions());
+         HttpStatus status = ex.getStatus();
+         body.put("status", status.value());
+         body.put("error", status.getReasonPhrase());
+         return ResponseEntity.status(status).body(body);
+     }
++
++    @Override
++    protected ResponseEntity<Object> handleExceptionInternal(Exception ex, Object body, HttpHeaders headers, HttpStatus status, WebRequest request) {
++        log.error("Exception", ex);
++        return super.handleExceptionInternal(ex, body, headers, status, request);
++    }
+ }
+Index: pom.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/pom.xml b/pom.xml
+--- a/pom.xml	(revision 57c07cf5bf63765cb56b5649404f8b8c3628b583)
++++ b/pom.xml	(date 1618249076704)
+@@ -5,7 +5,7 @@
+     <parent>
+         <groupId>org.springframework.boot</groupId>
+         <artifactId>spring-boot-starter-parent</artifactId>
+-        <version>2.4.0</version>
++        <version>2.4.4</version>
+         <relativePath/> <!-- lookup parent from repository -->
+     </parent>
+     <groupId>ru.javaops.bootjava</groupId>
+Index: src/main/resources/application.yaml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/resources/application.yaml b/src/main/resources/application.yaml
+--- a/src/main/resources/application.yaml	(revision 57c07cf5bf63765cb56b5649404f8b8c3628b583)
++++ b/src/main/resources/application.yaml	(date 1618249181230)
+@@ -4,7 +4,7 @@
+     show-sql: true
+     open-in-view: false
+     hibernate:
+-      ddl-auto: create-drop
++      ddl-auto: create
+     properties:
+       #  http://docs.jboss.org/hibernate/orm/5.3/userguide/html_single/Hibernate_User_Guide.html#configurations
+       hibernate:
+Index: src/main/java/ru/javaops/bootjava/util/JsonDeserializers.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/bootjava/util/JsonDeserializers.java b/src/main/java/ru/javaops/bootjava/util/JsonDeserializers.java
+--- a/src/main/java/ru/javaops/bootjava/util/JsonDeserializers.java	(revision 57c07cf5bf63765cb56b5649404f8b8c3628b583)
++++ b/src/main/java/ru/javaops/bootjava/util/JsonDeserializers.java	(date 1618239250920)
+@@ -5,10 +5,12 @@
+ import com.fasterxml.jackson.databind.DeserializationContext;
+ import com.fasterxml.jackson.databind.JsonDeserializer;
+ import com.fasterxml.jackson.databind.JsonNode;
++import lombok.experimental.UtilityClass;
+ import ru.javaops.bootjava.config.WebSecurityConfig;
+ 
+ import java.io.IOException;
+ 
++@UtilityClass
+ public class JsonDeserializers {
+ 
+     // https://stackoverflow.com/a/60995048/548473
+Index: src/main/java/ru/javaops/bootjava/RestaurantVotingApplication.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/bootjava/RestaurantVotingApplication.java b/src/main/java/ru/javaops/bootjava/RestaurantVotingApplication.java
+--- a/src/main/java/ru/javaops/bootjava/RestaurantVotingApplication.java	(revision 57c07cf5bf63765cb56b5649404f8b8c3628b583)
++++ b/src/main/java/ru/javaops/bootjava/RestaurantVotingApplication.java	(date 1618239250940)
+@@ -1,11 +1,9 @@
+ package ru.javaops.bootjava;
+ 
+-import lombok.AllArgsConstructor;
+ import org.springframework.boot.SpringApplication;
+ import org.springframework.boot.autoconfigure.SpringBootApplication;
+ 
+ @SpringBootApplication
+-@AllArgsConstructor
+ public class RestaurantVotingApplication {
+ 
+     public static void main(String[] args) {
+Index: src/main/java/ru/javaops/bootjava/web/AccountController.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/bootjava/web/AccountController.java b/src/main/java/ru/javaops/bootjava/web/AccountController.java
+--- a/src/main/java/ru/javaops/bootjava/web/AccountController.java	(revision 57c07cf5bf63765cb56b5649404f8b8c3628b583)
++++ b/src/main/java/ru/javaops/bootjava/web/AccountController.java	(date 1618249076708)
+@@ -22,7 +22,7 @@
+ 
+ import javax.validation.Valid;
+ import java.net.URI;
+-import java.util.Set;
++import java.util.EnumSet;
+ 
+ import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
+ 
+@@ -65,12 +65,12 @@
+         userRepository.deleteById(authUser.id());
+     }
+ 
+-    @PostMapping(value = "/register", consumes = MediaTypes.HAL_JSON_VALUE)
++    @PostMapping(value = "/register", consumes = MediaType.APPLICATION_JSON_VALUE)
+     @ResponseStatus(value = HttpStatus.CREATED)
+     public ResponseEntity<EntityModel<User>> register(@Valid @RequestBody User user) {
+         log.info("register {}", user);
+         ValidationUtil.checkNew(user);
+-        user.setRoles(Set.of(Role.USER));
++        user.setRoles(EnumSet.of(Role.USER));
+         user = userRepository.save(user);
+         URI uriOfNewResource = ServletUriComponentsBuilder.fromCurrentContextPath()
+                 .path("/api/account")
+Index: src/main/java/ru/javaops/bootjava/util/ValidationUtil.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/bootjava/util/ValidationUtil.java b/src/main/java/ru/javaops/bootjava/util/ValidationUtil.java
+--- a/src/main/java/ru/javaops/bootjava/util/ValidationUtil.java	(revision 57c07cf5bf63765cb56b5649404f8b8c3628b583)
++++ b/src/main/java/ru/javaops/bootjava/util/ValidationUtil.java	(date 1618239250926)
+@@ -1,8 +1,10 @@
+ package ru.javaops.bootjava.util;
+ 
++import lombok.experimental.UtilityClass;
+ import ru.javaops.bootjava.error.IllegalRequestDataException;
+ import ru.javaops.bootjava.model.BaseEntity;
+ 
++@UtilityClass
+ public class ValidationUtil {
+ 
+     public static void checkNew(BaseEntity entity) {

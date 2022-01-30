@@ -1,0 +1,135 @@
+Index: src/main/java/ru/javaops/bootjava/config/WebSecurityConfig.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/bootjava/config/WebSecurityConfig.java b/src/main/java/ru/javaops/bootjava/config/WebSecurityConfig.java
+--- a/src/main/java/ru/javaops/bootjava/config/WebSecurityConfig.java	(revision 249018bd51c05031eb93743044c48e1a9f774661)
++++ b/src/main/java/ru/javaops/bootjava/config/WebSecurityConfig.java	(date 1618522947481)
+@@ -43,7 +43,7 @@
+     public UserDetailsService userDetailsService() {
+         return email -> {
+             log.debug("Authenticating '{}'", email);
+-            Optional<User> optionalUser = userRepository.findByEmailIgnoreCase(email);
++            Optional<User> optionalUser = userRepository.findByEmailIgnoreCase(email.toLowerCase());
+             return new AuthUser(optionalUser.orElseThrow(
+                     () -> new UsernameNotFoundException("User '" + email + "' was not found")));
+         };
+Index: pom.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/pom.xml b/pom.xml
+--- a/pom.xml	(revision 249018bd51c05031eb93743044c48e1a9f774661)
++++ b/pom.xml	(date 1618522947533)
+@@ -66,6 +66,17 @@
+             <artifactId>springdoc-openapi-security</artifactId>
+             <version>${springdoc.version}</version>
+         </dependency>
++
++        <!--cache-->
++        <dependency>
++            <groupId>org.springframework.boot</groupId>
++            <artifactId>spring-boot-starter-cache</artifactId>
++        </dependency>
++        <dependency>
++            <groupId>com.github.ben-manes.caffeine</groupId>
++            <artifactId>caffeine</artifactId>
++        </dependency>
++
+         <dependency>
+             <groupId>com.h2database</groupId>
+             <artifactId>h2</artifactId>
+Index: src/main/java/ru/javaops/bootjava/repository/UserRepository.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/bootjava/repository/UserRepository.java b/src/main/java/ru/javaops/bootjava/repository/UserRepository.java
+--- a/src/main/java/ru/javaops/bootjava/repository/UserRepository.java	(revision 249018bd51c05031eb93743044c48e1a9f774661)
++++ b/src/main/java/ru/javaops/bootjava/repository/UserRepository.java	(date 1618522972137)
+@@ -1,6 +1,7 @@
+ package ru.javaops.bootjava.repository;
+ 
+ import io.swagger.v3.oas.annotations.tags.Tag;
++import org.springframework.cache.annotation.Cacheable;
+ import org.springframework.data.domain.Page;
+ import org.springframework.data.domain.Pageable;
+ import org.springframework.data.jpa.repository.JpaRepository;
+@@ -17,6 +18,7 @@
+ 
+     @RestResource(rel = "by-email", path = "by-email")
+     @Query("SELECT u FROM User u WHERE u.email = LOWER(:email)")
++    @Cacheable("users")
+     Optional<User> findByEmailIgnoreCase(String email);
+ 
+     @RestResource(rel = "by-lastname", path = "by-lastname")
+Index: src/main/java/ru/javaops/bootjava/web/AccountController.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/bootjava/web/AccountController.java b/src/main/java/ru/javaops/bootjava/web/AccountController.java
+--- a/src/main/java/ru/javaops/bootjava/web/AccountController.java	(revision 249018bd51c05031eb93743044c48e1a9f774661)
++++ b/src/main/java/ru/javaops/bootjava/web/AccountController.java	(date 1618522947516)
+@@ -3,6 +3,8 @@
+ import io.swagger.v3.oas.annotations.tags.Tag;
+ import lombok.AllArgsConstructor;
+ import lombok.extern.slf4j.Slf4j;
++import org.springframework.cache.annotation.CacheEvict;
++import org.springframework.cache.annotation.CachePut;
+ import org.springframework.data.rest.webmvc.RepositoryLinksResource;
+ import org.springframework.hateoas.EntityModel;
+ import org.springframework.hateoas.MediaTypes;
+@@ -62,6 +64,7 @@
+ 
+     @DeleteMapping
+     @ResponseStatus(HttpStatus.NO_CONTENT)
++    @CacheEvict(value = "users", key = "#authUser.username")
+     public void delete(@AuthenticationPrincipal AuthUser authUser) {
+         log.info("delete {}", authUser);
+         userRepository.deleteById(authUser.id());
+@@ -82,7 +85,8 @@
+ 
+     @PutMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+     @ResponseStatus(HttpStatus.NO_CONTENT)
+-    public void update(@Valid @RequestBody User user, @AuthenticationPrincipal AuthUser authUser) {
++    @CachePut(value = "users", key = "#authUser.username")
++    public User update(@Valid @RequestBody User user, @AuthenticationPrincipal AuthUser authUser) {
+         log.info("update {} to {}", authUser, user);
+         User oldUser = authUser.getUser();
+         ValidationUtil.assureIdConsistent(user, oldUser.id());
+@@ -90,7 +94,7 @@
+         if (user.getPassword() == null) {
+             user.setPassword(oldUser.getPassword());
+         }
+-        userRepository.save(user);
++        return userRepository.save(user);
+     }
+ 
+ /*
+Index: src/main/java/ru/javaops/bootjava/config/AppConfig.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/bootjava/config/AppConfig.java b/src/main/java/ru/javaops/bootjava/config/AppConfig.java
+--- a/src/main/java/ru/javaops/bootjava/config/AppConfig.java	(revision 249018bd51c05031eb93743044c48e1a9f774661)
++++ b/src/main/java/ru/javaops/bootjava/config/AppConfig.java	(date 1618522947467)
+@@ -2,6 +2,7 @@
+ 
+ import lombok.extern.slf4j.Slf4j;
+ import org.h2.tools.Server;
++import org.springframework.cache.annotation.EnableCaching;
+ import org.springframework.context.annotation.Bean;
+ import org.springframework.context.annotation.Configuration;
+ 
+@@ -9,6 +10,7 @@
+ 
+ @Configuration
+ @Slf4j
++@EnableCaching
+ public class AppConfig {
+ 
+ /*

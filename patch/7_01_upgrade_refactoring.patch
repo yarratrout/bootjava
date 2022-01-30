@@ -1,0 +1,676 @@
+Index: src/main/java/ru/javaops/bootjava/web/error/GlobalExceptionHandler.java
+===================================================================
+diff --git a/src/main/java/ru/javaops/bootjava/web/error/GlobalExceptionHandler.java b/src/main/java/ru/javaops/bootjava/web/error/GlobalExceptionHandler.java
+deleted file mode 100644
+--- a/src/main/java/ru/javaops/bootjava/web/error/GlobalExceptionHandler.java	(revision 22e33769e12758c8473390c6fbbcbf33cc827b61)
++++ /dev/null	(revision 22e33769e12758c8473390c6fbbcbf33cc827b61)
+@@ -1,38 +0,0 @@
+-package ru.javaops.bootjava.web.error;
+-
+-import lombok.AllArgsConstructor;
+-import lombok.extern.slf4j.Slf4j;
+-import org.springframework.boot.web.servlet.error.ErrorAttributes;
+-import org.springframework.http.HttpHeaders;
+-import org.springframework.http.HttpStatus;
+-import org.springframework.http.ResponseEntity;
+-import org.springframework.web.bind.annotation.ExceptionHandler;
+-import org.springframework.web.bind.annotation.RestControllerAdvice;
+-import org.springframework.web.context.request.WebRequest;
+-import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+-import ru.javaops.bootjava.error.AppException;
+-
+-import java.util.Map;
+-
+-@RestControllerAdvice
+-@AllArgsConstructor
+-@Slf4j
+-public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
+-    private final ErrorAttributes errorAttributes;
+-
+-    @ExceptionHandler(AppException.class)
+-    public ResponseEntity<Map<String, Object>> appException(AppException ex, WebRequest request) {
+-        log.error("Application Exception", ex);
+-        Map<String, Object> body = errorAttributes.getErrorAttributes(request, ex.getOptions());
+-        HttpStatus status = ex.getStatus();
+-        body.put("status", status.value());
+-        body.put("error", status.getReasonPhrase());
+-        return ResponseEntity.status(status).body(body);
+-    }
+-
+-    @Override
+-    protected ResponseEntity<Object> handleExceptionInternal(Exception ex, Object body, HttpHeaders headers, HttpStatus status, WebRequest request) {
+-        log.error("Exception", ex);
+-        return super.handleExceptionInternal(ex, body, headers, status, request);
+-    }
+-}
+Index: src/main/java/ru/javaops/bootjava/error/AppException.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/bootjava/error/AppException.java b/src/main/java/ru/javaops/bootjava/error/AppException.java
+--- a/src/main/java/ru/javaops/bootjava/error/AppException.java	(revision 22e33769e12758c8473390c6fbbcbf33cc827b61)
++++ b/src/main/java/ru/javaops/bootjava/error/AppException.java	(date 1638545383219)
+@@ -13,4 +13,9 @@
+         super(status, message);
+         this.options = options;
+     }
++
++    @Override
++    public String getMessage() {
++        return getReason();
++    }
+ }
+Index: src/main/java/ru/javaops/bootjava/web/AccountController.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/bootjava/web/AccountController.java b/src/main/java/ru/javaops/bootjava/web/AccountController.java
+--- a/src/main/java/ru/javaops/bootjava/web/AccountController.java	(revision 22e33769e12758c8473390c6fbbcbf33cc827b61)
++++ b/src/main/java/ru/javaops/bootjava/web/AccountController.java	(date 1640377306471)
+@@ -16,11 +16,10 @@
+ import org.springframework.security.core.annotation.AuthenticationPrincipal;
+ import org.springframework.web.bind.annotation.*;
+ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+-import ru.javaops.bootjava.AuthUser;
+ import ru.javaops.bootjava.model.Role;
+ import ru.javaops.bootjava.model.User;
+ import ru.javaops.bootjava.repository.UserRepository;
+-import ru.javaops.bootjava.util.ValidationUtil;
++import ru.javaops.bootjava.util.validation.ValidationUtil;
+ 
+ import javax.validation.Valid;
+ import java.net.URI;
+@@ -70,7 +69,7 @@
+         userRepository.deleteById(authUser.id());
+     }
+ 
+-    @PostMapping(value = "/register", consumes = MediaType.APPLICATION_JSON_VALUE)
++    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
+     @ResponseStatus(value = HttpStatus.CREATED)
+     public ResponseEntity<EntityModel<User>> register(@Valid @RequestBody User user) {
+         log.info("register {}", user);
+Index: src/test/java/ru/javaops/bootjava/web/AccountControllerTest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/bootjava/web/AccountControllerTest.java b/src/test/java/ru/javaops/bootjava/web/AccountControllerTest.java
+--- a/src/test/java/ru/javaops/bootjava/web/AccountControllerTest.java	(revision 22e33769e12758c8473390c6fbbcbf33cc827b61)
++++ b/src/test/java/ru/javaops/bootjava/web/AccountControllerTest.java	(date 1640377306473)
+@@ -30,7 +30,7 @@
+                 .andExpect(status().isOk())
+                 .andDo(print())
+                 .andExpect(content().contentTypeCompatibleWith(MediaTypes.HAL_JSON_VALUE))
+-                .andExpect(jsonMatcher(user, UserTestUtil::assertEquals));
++                .andExpect(jsonMatcher(user, UserTestUtil::assertNoIdEquals));
+     }
+ 
+     @Test
+@@ -51,14 +51,11 @@
+     @Test
+     void register() throws Exception {
+         User newUser = UserTestUtil.getNew();
+-        User registered = asUser(perform(MockMvcRequestBuilders.post(URL + "/register")
++        User registered = asUser(perform(MockMvcRequestBuilders.post(URL)
+                 .contentType(MediaType.APPLICATION_JSON)
+                 .content(writeValue(newUser)))
+                 .andExpect(status().isCreated()).andReturn());
+-        int newId = registered.id();
+-        newUser.setId(newId);
+-        UserTestUtil.assertEquals(registered, newUser);
+-        UserTestUtil.assertEquals(registered, userRepository.findById(newId).orElseThrow());
++        UserTestUtil.assertNoIdEquals(registered, newUser);
+     }
+ 
+     @Test
+Index: pom.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/pom.xml b/pom.xml
+--- a/pom.xml	(revision 22e33769e12758c8473390c6fbbcbf33cc827b61)
++++ b/pom.xml	(date 1640377306466)
+@@ -5,19 +5,21 @@
+     <parent>
+         <groupId>org.springframework.boot</groupId>
+         <artifactId>spring-boot-starter-parent</artifactId>
+-        <version>2.4.4</version>
++        <version>2.6.1</version>
+         <relativePath/> <!-- lookup parent from repository -->
+     </parent>
+-    <groupId>ru.javaops.bootjava</groupId>
+-    <artifactId>restaurant-voting</artifactId>
++    <groupId>ru.javaops</groupId>
++    <artifactId>bootjava</artifactId>
+     <version>1.0</version>
+-    <name>restaurant-voting</name>
++    <name>BootJava</name>
+     <description>Spring Boot 2.x HATEOAS application (BootJava)</description>
+     <url>https://javaops.ru/view/bootjava</url>
+ 
+     <properties>
+-        <java.version>15</java.version>
+-        <springdoc.version>1.5.6</springdoc.version>
++        <java.version>17</java.version>
++        <springdoc.version>1.6.2</springdoc.version>
++        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
++        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+     </properties>
+ 
+     <dependencies>
+@@ -41,14 +43,6 @@
+             <groupId>org.springframework.boot</groupId>
+             <artifactId>spring-boot-starter-security</artifactId>
+         </dependency>
+-
+-        <!--
+-                <dependency>
+-                    <groupId>org.springframework.data</groupId>
+-                    <artifactId>spring-data-rest-hal-browser</artifactId>
+-                    <scope>runtime</scope>
+-                </dependency>
+-        -->
+ 
+         <!--Swagger-->
+         <dependency>
+@@ -99,6 +93,12 @@
+             <artifactId>spring-security-test</artifactId>
+             <scope>test</scope>
+         </dependency>
++        <!--        https://youtrack.jetbrains.com/issue/IDEA-231927-->
++        <dependency>
++            <groupId>org.junit.platform</groupId>
++            <artifactId>junit-platform-launcher</artifactId>
++            <scope>test</scope>
++        </dependency>
+     </dependencies>
+ 
+     <build>
+@@ -113,6 +113,14 @@
+                             <artifactId>lombok</artifactId>
+                         </exclude>
+                     </excludes>
++                </configuration>
++            </plugin>
++            <plugin>
++                <!--https://junit.org/junit5/docs/current/user-guide/#running-tests-build-maven -->
++                <groupId>org.apache.maven.plugins</groupId>
++                <artifactId>maven-surefire-plugin</artifactId>
++                <configuration>
++                    <argLine>-Dfile.encoding=UTF-8</argLine>
+                 </configuration>
+             </plugin>
+         </plugins>
+Index: src/main/java/ru/javaops/bootjava/config/OpenApiConfig.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/bootjava/config/OpenApiConfig.java b/src/main/java/ru/javaops/bootjava/config/OpenApiConfig.java
+--- a/src/main/java/ru/javaops/bootjava/config/OpenApiConfig.java	(revision 22e33769e12758c8473390c6fbbcbf33cc827b61)
++++ b/src/main/java/ru/javaops/bootjava/config/OpenApiConfig.java	(date 1640377457613)
+@@ -21,7 +21,12 @@
+         info = @Info(
+                 title = "REST API documentation",
+                 version = "1.0",
+-                description = "Приложение по <a href='https://javaops.ru/view/bootjava'>курсу BootJava</a>",
++                description = """
++                        Приложение по <a href='https://javaops.ru/view/bootjava'>курсу BootJava</a>
++                        <p><b>Тестовые креденшелы:</b><br>
++                        &nbsp;user@gmail.com / password<br>
++                        &nbsp;admin@javaops.ru / admin</p>
++                        """,
+                 contact = @Contact(url = "https://javaops.ru/#contacts", name = "Grigory Kislin", email = "admin@javaops.ru")
+         ),
+         security = @SecurityRequirement(name = "basicAuth")
+Index: src/main/java/ru/javaops/bootjava/config/WebSecurityConfig.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/bootjava/config/WebSecurityConfig.java b/src/main/java/ru/javaops/bootjava/config/WebSecurityConfig.java
+--- a/src/main/java/ru/javaops/bootjava/config/WebSecurityConfig.java	(revision 22e33769e12758c8473390c6fbbcbf33cc827b61)
++++ b/src/main/java/ru/javaops/bootjava/config/WebSecurityConfig.java	(date 1640377306468)
+@@ -6,6 +6,7 @@
+ import org.springframework.beans.factory.annotation.Autowired;
+ import org.springframework.context.annotation.Bean;
+ import org.springframework.context.annotation.Configuration;
++import org.springframework.http.HttpMethod;
+ import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
+ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+ import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+@@ -15,13 +16,12 @@
+ import org.springframework.security.core.userdetails.UsernameNotFoundException;
+ import org.springframework.security.crypto.factory.PasswordEncoderFactories;
+ import org.springframework.security.crypto.password.PasswordEncoder;
+-import ru.javaops.bootjava.AuthUser;
+ import ru.javaops.bootjava.model.Role;
+ import ru.javaops.bootjava.model.User;
+ import ru.javaops.bootjava.repository.UserRepository;
+ import ru.javaops.bootjava.util.JsonUtil;
++import ru.javaops.bootjava.web.AuthUser;
+ 
+-import javax.annotation.PostConstruct;
+ import java.util.Optional;
+ 
+ @Configuration
+@@ -32,18 +32,24 @@
+ 
+     public static final PasswordEncoder PASSWORD_ENCODER = PasswordEncoderFactories.createDelegatingPasswordEncoder();
+     private final UserRepository userRepository;
+-    private final ObjectMapper objectMapper;
+ 
+-    @PostConstruct
+-    void setMapper() {
++    @Autowired
++    private void setMapper(ObjectMapper objectMapper) {
+         JsonUtil.setObjectMapper(objectMapper);
+     }
+ 
+     @Bean
+-    public UserDetailsService userDetailsService() {
++    @Override
++    // https://stackoverflow.com/a/70176629/548473
++    public UserDetailsService userDetailsServiceBean() throws Exception {
++        return super.userDetailsServiceBean();
++    }
++
++    @Override
++    protected UserDetailsService userDetailsService() {
+         return email -> {
+             log.debug("Authenticating '{}'", email);
+-            Optional<User> optionalUser = userRepository.findByEmailIgnoreCase(email.toLowerCase());
++            Optional<User> optionalUser = userRepository.findByEmailIgnoreCase(email);
+             return new AuthUser(optionalUser.orElseThrow(
+                     () -> new UsernameNotFoundException("User '" + email + "' was not found")));
+         };
+@@ -58,7 +64,7 @@
+     @Override
+     protected void configure(HttpSecurity http) throws Exception {
+         http.authorizeRequests()
+-                .antMatchers("/api/account/register").anonymous()
++                .antMatchers(HttpMethod.POST, "/api/account").anonymous()
+                 .antMatchers("/api/account").hasRole(Role.USER.name())
+                 .antMatchers("/api/**").hasRole(Role.ADMIN.name())
+                 .and().httpBasic()
+Index: src/test/java/ru/javaops/bootjava/web/AbstractControllerTest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/bootjava/web/AbstractControllerTest.java b/src/test/java/ru/javaops/bootjava/web/AbstractControllerTest.java
+--- a/src/test/java/ru/javaops/bootjava/web/AbstractControllerTest.java	(revision 22e33769e12758c8473390c6fbbcbf33cc827b61)
++++ b/src/test/java/ru/javaops/bootjava/web/AbstractControllerTest.java	(date 1640374931952)
+@@ -18,7 +18,7 @@
+ public abstract class AbstractControllerTest {
+ 
+     @Autowired
+-    protected MockMvc mockMvc;
++    private MockMvc mockMvc;
+ 
+     protected ResultActions perform(MockHttpServletRequestBuilder builder) throws Exception {
+         return mockMvc.perform(builder);
+Index: src/main/resources/application.yaml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/resources/application.yaml b/src/main/resources/application.yaml
+--- a/src/main/resources/application.yaml	(revision 22e33769e12758c8473390c6fbbcbf33cc827b61)
++++ b/src/main/resources/application.yaml	(date 1640377306471)
+@@ -3,6 +3,8 @@
+   jpa:
+     show-sql: true
+     open-in-view: false
++    # https://stackoverflow.com/a/67678945/548473
++    defer-datasource-initialization: true
+     hibernate:
+       ddl-auto: create
+     properties:
+@@ -14,16 +16,16 @@
+         jdbc.batch_size: 20
+   datasource:
+     # ImMemory
+-    url: jdbc:h2:mem:voting
+-    #    tcp: jdbc:h2:tcp://localhost:9092/mem:voting
++    url: jdbc:h2:mem:bootjava
++    #    tcp: jdbc:h2:tcp://localhost:9092/mem:bootjava
+     # Absolute path
+-    #    url: jdbc:h2:C:/projects/bootjava/restorant-voting/db/voting
+-    #    tcp: jdbc:h2:tcp://localhost:9092/C:/projects/bootjava/restorant-voting/db/voting
++    #    url: jdbc:h2:C:/projects/bootjava/db/bootjava
++    #    tcp: jdbc:h2:tcp://localhost:9092/C:/projects/bootjava/db/bootjava
+     # Relative path form current dir
+-    #    url: jdbc:h2:./db/voting
++    #    url: jdbc:h2:./db/bootjava
+     # Relative path from home
+-    #    url: jdbc:h2:~/voting
+-    #    tcp: jdbc:h2:tcp://localhost:9092/~/voting
++    #    url: jdbc:h2:~/bootjava
++    #    tcp: jdbc:h2:tcp://localhost:9092/~/bootjava
+     username: sa
+     password:
+   h2.console.enabled: true
+@@ -34,6 +36,11 @@
+     defaultPageSize: 20
+     returnBodyOnCreate: true
+ 
++  # https://docs.spring.io/spring-boot/docs/current/reference/html/appendix-application-properties.html#common-application-properties-cache
++  cache:
++    cache-names: users
++    caffeine.spec: maximumSize=5000,expireAfterAccess=60s
++
+ #  https://docs.spring.io/spring-boot/docs/current/reference/html/appendix-application-properties.html#security-properties
+ #  security:
+ #    user:
+@@ -45,7 +52,7 @@
+   level:
+     root: WARN
+     ru.javaops.bootjava: DEBUG
+-#    org.springframework.security.web.FilterChainProxy: DEBUG
++    org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver: DEBUG
+ 
+ server.servlet:
+   encoding:
+Index: src/main/java/ru/javaops/bootjava/model/User.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/bootjava/model/User.java b/src/main/java/ru/javaops/bootjava/model/User.java
+--- a/src/main/java/ru/javaops/bootjava/model/User.java	(revision 22e33769e12758c8473390c6fbbcbf33cc827b61)
++++ b/src/main/java/ru/javaops/bootjava/model/User.java	(date 1640377306469)
+@@ -8,7 +8,7 @@
+ 
+ import javax.persistence.*;
+ import javax.validation.constraints.Email;
+-import javax.validation.constraints.NotEmpty;
++import javax.validation.constraints.NotBlank;
+ import javax.validation.constraints.Size;
+ import java.io.Serializable;
+ import java.util.Collection;
+@@ -21,16 +21,15 @@
+ @Setter
+ @NoArgsConstructor(access = AccessLevel.PROTECTED)
+ @AllArgsConstructor
+-@ToString(callSuper = true, exclude = {"password"})
+ public class User extends BaseEntity implements Serializable {
+     public User(Integer id, String email, String firstName, String lastName, String password, Collection<Role> roles) {
+-        this(email, firstName, lastName, password, EnumSet.copyOf(roles));
++        this(email, firstName, lastName, password, roles.isEmpty() ? EnumSet.noneOf(Role.class) : EnumSet.copyOf(roles));
+         this.id = id;
+     }
+ 
+     @Column(name = "email", nullable = false, unique = true)
+     @Email
+-    @NotEmpty
++    @NotBlank
+     @Size(max = 128)
+     private String email;
+ 
+@@ -49,7 +48,9 @@
+     private String password;
+ 
+     @Enumerated(EnumType.STRING)
+-    @CollectionTable(name = "user_role", joinColumns = @JoinColumn(name = "user_id"), uniqueConstraints = {@UniqueConstraint(columnNames = {"user_id", "role"}, name = "user_roles_unique")})
++    @CollectionTable(name = "user_role",
++            joinColumns = @JoinColumn(name = "user_id"),
++            uniqueConstraints = @UniqueConstraint(columnNames = {"user_id", "role"}, name = "uk_user_role"))
+     @Column(name = "role")
+     @ElementCollection(fetch = FetchType.EAGER)
+     private Set<Role> roles;
+@@ -57,4 +58,9 @@
+     public void setEmail(String email) {
+         this.email = StringUtils.hasText(email) ? email.toLowerCase() : null;
+     }
++
++    @Override
++    public String toString() {
++        return "User:" + id + '[' + email + ']';
++    }
+ }
+\ No newline at end of file
+Index: src/main/java/ru/javaops/bootjava/AuthUser.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/bootjava/AuthUser.java b/src/main/java/ru/javaops/bootjava/web/AuthUser.java
+rename from src/main/java/ru/javaops/bootjava/AuthUser.java
+rename to src/main/java/ru/javaops/bootjava/web/AuthUser.java
+--- a/src/main/java/ru/javaops/bootjava/AuthUser.java	(revision 22e33769e12758c8473390c6fbbcbf33cc827b61)
++++ b/src/main/java/ru/javaops/bootjava/web/AuthUser.java	(date 1638545383220)
+@@ -1,4 +1,4 @@
+-package ru.javaops.bootjava;
++package ru.javaops.bootjava.web;
+ 
+ import lombok.Getter;
+ import lombok.ToString;
+Index: src/main/java/ru/javaops/bootjava/RestaurantVotingApplication.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/bootjava/RestaurantVotingApplication.java b/src/main/java/ru/javaops/bootjava/BootJavaApplication.java
+rename from src/main/java/ru/javaops/bootjava/RestaurantVotingApplication.java
+rename to src/main/java/ru/javaops/bootjava/BootJavaApplication.java
+--- a/src/main/java/ru/javaops/bootjava/RestaurantVotingApplication.java	(revision 22e33769e12758c8473390c6fbbcbf33cc827b61)
++++ b/src/main/java/ru/javaops/bootjava/BootJavaApplication.java	(date 1638439962115)
+@@ -4,9 +4,9 @@
+ import org.springframework.boot.autoconfigure.SpringBootApplication;
+ 
+ @SpringBootApplication
+-public class RestaurantVotingApplication {
++public class BootJavaApplication {
+ 
+     public static void main(String[] args) {
+-        SpringApplication.run(RestaurantVotingApplication.class, args);
++        SpringApplication.run(BootJavaApplication.class, args);
+     }
+ }
+Index: src/main/java/ru/javaops/bootjava/web/GlobalExceptionHandler.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/bootjava/web/GlobalExceptionHandler.java b/src/main/java/ru/javaops/bootjava/web/GlobalExceptionHandler.java
+new file mode 100644
+--- /dev/null	(date 1638565853818)
++++ b/src/main/java/ru/javaops/bootjava/web/GlobalExceptionHandler.java	(date 1638565853818)
+@@ -0,0 +1,86 @@
++package ru.javaops.bootjava.web;
++
++import lombok.AllArgsConstructor;
++import lombok.extern.slf4j.Slf4j;
++import org.springframework.boot.web.error.ErrorAttributeOptions;
++import org.springframework.boot.web.servlet.error.ErrorAttributes;
++import org.springframework.http.HttpHeaders;
++import org.springframework.http.HttpStatus;
++import org.springframework.http.ResponseEntity;
++import org.springframework.lang.NonNull;
++import org.springframework.validation.BindException;
++import org.springframework.validation.BindingResult;
++import org.springframework.web.bind.MethodArgumentNotValidException;
++import org.springframework.web.bind.annotation.ExceptionHandler;
++import org.springframework.web.bind.annotation.RestControllerAdvice;
++import org.springframework.web.context.request.WebRequest;
++import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
++import ru.javaops.bootjava.error.AppException;
++import ru.javaops.bootjava.util.validation.ValidationUtil;
++
++import javax.persistence.EntityNotFoundException;
++import java.util.Map;
++import java.util.stream.Collectors;
++
++import static org.springframework.boot.web.error.ErrorAttributeOptions.Include.MESSAGE;
++
++@RestControllerAdvice
++@AllArgsConstructor
++@Slf4j
++public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
++    private final ErrorAttributes errorAttributes;
++
++    @ExceptionHandler(AppException.class)
++    public ResponseEntity<?> appException(WebRequest request, AppException ex) {
++        log.error("ApplicationException: {}", ex.getMessage());
++        return createResponseEntity(request, ex.getOptions(), null, ex.getStatus());
++    }
++
++    @ExceptionHandler(EntityNotFoundException.class)
++    public ResponseEntity<?> entityNotFoundException(WebRequest request, EntityNotFoundException ex) {
++        log.error("EntityNotFoundException: {}", ex.getMessage());
++        return createResponseEntity(request, ErrorAttributeOptions.of(MESSAGE), null, HttpStatus.UNPROCESSABLE_ENTITY);
++    }
++
++    @NonNull
++    @Override
++    protected ResponseEntity<Object> handleExceptionInternal(
++            @NonNull Exception ex, Object body, @NonNull HttpHeaders headers, @NonNull HttpStatus status, @NonNull WebRequest request) {
++        log.error("Exception", ex);
++        super.handleExceptionInternal(ex, body, headers, status, request);
++        return createResponseEntity(request, ErrorAttributeOptions.of(), ValidationUtil.getRootCause(ex).getMessage(), status);
++    }
++
++    @NonNull
++    @Override
++    protected ResponseEntity<Object> handleMethodArgumentNotValid(
++            MethodArgumentNotValidException ex,
++            @NonNull HttpHeaders headers, @NonNull HttpStatus status, @NonNull WebRequest request) {
++        return handleBindingErrors(ex.getBindingResult(), request);
++    }
++
++    @NonNull
++    @Override
++    protected ResponseEntity<Object> handleBindException(
++            BindException ex, @NonNull HttpHeaders headers, @NonNull HttpStatus status, @NonNull WebRequest request) {
++        return handleBindingErrors(ex.getBindingResult(), request);
++    }
++
++    private ResponseEntity<Object> handleBindingErrors(BindingResult result, WebRequest request) {
++        String msg = result.getFieldErrors().stream()
++                .map(fe -> String.format("[%s] %s", fe.getField(), fe.getDefaultMessage()))
++                .collect(Collectors.joining("\n"));
++        return createResponseEntity(request, ErrorAttributeOptions.defaults(), msg, HttpStatus.UNPROCESSABLE_ENTITY);
++    }
++
++    @SuppressWarnings("unchecked")
++    private <T> ResponseEntity<T> createResponseEntity(WebRequest request, ErrorAttributeOptions options, String msg, HttpStatus status) {
++        Map<String, Object> body = errorAttributes.getErrorAttributes(request, options);
++        if (msg != null) {
++            body.put("message", msg);
++        }
++        body.put("status", status.value());
++        body.put("error", status.getReasonPhrase());
++        return (ResponseEntity<T>) ResponseEntity.status(status).body(body);
++    }
++}
+Index: src/main/java/ru/javaops/bootjava/util/ValidationUtil.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/bootjava/util/ValidationUtil.java b/src/main/java/ru/javaops/bootjava/util/validation/ValidationUtil.java
+rename from src/main/java/ru/javaops/bootjava/util/ValidationUtil.java
+rename to src/main/java/ru/javaops/bootjava/util/validation/ValidationUtil.java
+--- a/src/main/java/ru/javaops/bootjava/util/ValidationUtil.java	(revision 22e33769e12758c8473390c6fbbcbf33cc827b61)
++++ b/src/main/java/ru/javaops/bootjava/util/validation/ValidationUtil.java	(date 1640377306470)
+@@ -1,6 +1,8 @@
+-package ru.javaops.bootjava.util;
++package ru.javaops.bootjava.util.validation;
+ 
+ import lombok.experimental.UtilityClass;
++import org.springframework.core.NestedExceptionUtils;
++import org.springframework.lang.NonNull;
+ import ru.javaops.bootjava.error.IllegalRequestDataException;
+ import ru.javaops.bootjava.model.BaseEntity;
+ 
+@@ -21,4 +23,11 @@
+             throw new IllegalRequestDataException(entity.getClass().getSimpleName() + " must has id=" + id);
+         }
+     }
++
++    //  https://stackoverflow.com/a/65442410/548473
++    @NonNull
++    public static Throwable getRootCause(@NonNull Throwable t) {
++        Throwable rootCause = NestedExceptionUtils.getRootCause(t);
++        return rootCause != null ? rootCause : t;
++    }
+ }
+\ No newline at end of file
+Index: src/main/java/ru/javaops/bootjava/config/AppConfig.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/bootjava/config/AppConfig.java b/src/main/java/ru/javaops/bootjava/config/AppConfig.java
+--- a/src/main/java/ru/javaops/bootjava/config/AppConfig.java	(revision 22e33769e12758c8473390c6fbbcbf33cc827b61)
++++ b/src/main/java/ru/javaops/bootjava/config/AppConfig.java	(date 1640377306467)
+@@ -5,6 +5,7 @@
+ import org.springframework.cache.annotation.EnableCaching;
+ import org.springframework.context.annotation.Bean;
+ import org.springframework.context.annotation.Configuration;
++import org.springframework.context.annotation.Profile;
+ 
+ import java.sql.SQLException;
+ 
+@@ -13,15 +14,9 @@
+ @EnableCaching
+ public class AppConfig {
+ 
+-/*
++    @Profile("!test")
+     @Bean(initMethod = "start", destroyMethod = "stop")
+-    public Server h2WebServer() throws SQLException {
+-        return Server.createWebServer("-web", "-webAllowOthers", "-webPort", "8082");
+-    }
+-*/
+-
+-    @Bean(initMethod = "start", destroyMethod = "stop")
+-    public Server h2Server() throws SQLException {
++    Server h2Server() throws SQLException {
+         log.info("Start H2 TCP server");
+         return Server.createTcpServer("-tcp", "-tcpAllowOthers", "-tcpPort", "9092");
+     }
+Index: src/main/java/ru/javaops/bootjava/model/BaseEntity.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/bootjava/model/BaseEntity.java b/src/main/java/ru/javaops/bootjava/model/BaseEntity.java
+--- a/src/main/java/ru/javaops/bootjava/model/BaseEntity.java	(revision 22e33769e12758c8473390c6fbbcbf33cc827b61)
++++ b/src/main/java/ru/javaops/bootjava/model/BaseEntity.java	(date 1640377306468)
+@@ -1,6 +1,7 @@
+ package ru.javaops.bootjava.model;
+ 
+ import com.fasterxml.jackson.annotation.JsonIgnore;
++import io.swagger.v3.oas.annotations.media.Schema;
+ import lombok.*;
+ import org.springframework.data.domain.Persistable;
+ import org.springframework.data.util.ProxyUtils;
+@@ -15,11 +16,11 @@
+ @Setter
+ @NoArgsConstructor(access = AccessLevel.PROTECTED)
+ @AllArgsConstructor(access = AccessLevel.PROTECTED)
+-@ToString
+ public abstract class BaseEntity implements Persistable<Integer> {
+ 
+     @Id
+     @GeneratedValue(strategy = GenerationType.IDENTITY)
++    @Schema(accessMode = Schema.AccessMode.READ_ONLY) // https://stackoverflow.com/a/28025008/548473
+     protected Integer id;
+ 
+     // doesn't work for hibernate lazy proxy
+@@ -51,4 +52,9 @@
+     public int hashCode() {
+         return id == null ? 0 : id;
+     }
++
++    @Override
++    public String toString() {
++        return getClass().getSimpleName() + ":" + id;
++    }
+ }
+\ No newline at end of file

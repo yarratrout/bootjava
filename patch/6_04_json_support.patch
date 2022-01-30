@@ -1,0 +1,244 @@
+Index: src/main/java/ru/javaops/bootjava/config/WebSecurityConfig.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/bootjava/config/WebSecurityConfig.java b/src/main/java/ru/javaops/bootjava/config/WebSecurityConfig.java
+--- a/src/main/java/ru/javaops/bootjava/config/WebSecurityConfig.java	(revision 10188a9f795ad864534187e8520402e119cfec59)
++++ b/src/main/java/ru/javaops/bootjava/config/WebSecurityConfig.java	(date 1618239089336)
+@@ -1,5 +1,6 @@
+ package ru.javaops.bootjava.config;
+ 
++import com.fasterxml.jackson.databind.ObjectMapper;
+ import lombok.AllArgsConstructor;
+ import lombok.extern.slf4j.Slf4j;
+ import org.springframework.beans.factory.annotation.Autowired;
+@@ -18,7 +19,9 @@
+ import ru.javaops.bootjava.model.Role;
+ import ru.javaops.bootjava.model.User;
+ import ru.javaops.bootjava.repository.UserRepository;
++import ru.javaops.bootjava.util.JsonUtil;
+ 
++import javax.annotation.PostConstruct;
+ import java.util.Optional;
+ 
+ @Configuration
+@@ -29,6 +32,12 @@
+ 
+     public static final PasswordEncoder PASSWORD_ENCODER = PasswordEncoderFactories.createDelegatingPasswordEncoder();
+     private final UserRepository userRepository;
++    private final ObjectMapper objectMapper;
++
++    @PostConstruct
++    void setMapper() {
++        JsonUtil.setObjectMapper(objectMapper);
++    }
+ 
+     @Bean
+     public UserDetailsService userDetailsService() {
+Index: src/main/java/ru/javaops/bootjava/util/JsonUtil.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/bootjava/util/JsonUtil.java b/src/main/java/ru/javaops/bootjava/util/JsonUtil.java
+new file mode 100644
+--- /dev/null	(date 1618239089347)
++++ b/src/main/java/ru/javaops/bootjava/util/JsonUtil.java	(date 1618239089347)
+@@ -0,0 +1,31 @@
++package ru.javaops.bootjava.util;
++
++import com.fasterxml.jackson.core.JsonProcessingException;
++import com.fasterxml.jackson.databind.ObjectMapper;
++import com.fasterxml.jackson.databind.ObjectReader;
++import lombok.experimental.UtilityClass;
++
++import java.io.IOException;
++import java.util.List;
++
++@UtilityClass
++public class JsonUtil {
++    private static ObjectMapper objectMapper;
++
++    public static void setObjectMapper(ObjectMapper objectMapper) {
++        JsonUtil.objectMapper = objectMapper;
++    }
++
++    public static <T> List<T> readValues(String json, Class<T> clazz) throws IOException {
++        ObjectReader reader = objectMapper.readerFor(clazz);
++        return reader.<T>readValues(json).readAll();
++    }
++
++    public static <T> T readValue(String json, Class<T> clazz) throws JsonProcessingException {
++        return objectMapper.readValue(json, clazz);
++    }
++
++    public static <T> String writeValue(T obj) throws JsonProcessingException {
++        return objectMapper.writeValueAsString(obj);
++    }
++}
+\ No newline at end of file
+Index: src/test/java/ru/javaops/bootjava/web/UserControllerTest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/bootjava/web/UserControllerTest.java b/src/test/java/ru/javaops/bootjava/web/UserControllerTest.java
+--- a/src/test/java/ru/javaops/bootjava/web/UserControllerTest.java	(revision 10188a9f795ad864534187e8520402e119cfec59)
++++ b/src/test/java/ru/javaops/bootjava/web/UserControllerTest.java	(date 1618239089364)
+@@ -4,14 +4,18 @@
+ import org.junit.jupiter.api.Test;
+ import org.springframework.beans.factory.annotation.Autowired;
+ import org.springframework.hateoas.MediaTypes;
++import org.springframework.http.MediaType;
+ import org.springframework.security.test.context.support.WithUserDetails;
+ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
++import ru.javaops.bootjava.UserTestUtil;
++import ru.javaops.bootjava.model.User;
+ import ru.javaops.bootjava.repository.UserRepository;
+ 
+ import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
+ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+ import static ru.javaops.bootjava.UserTestUtil.*;
++import static ru.javaops.bootjava.util.JsonUtil.writeValue;
+ 
+ class UserControllerTest extends AbstractControllerTest {
+     static final String URL = "/api/users/";
+@@ -61,4 +65,24 @@
+         Assertions.assertFalse(userRepository.findById(USER_ID).isPresent());
+         Assertions.assertTrue(userRepository.findById(ADMIN_ID).isPresent());
+     }
++
++    @Test
++    @WithUserDetails(value = ADMIN_MAIL)
++    void create() throws Exception {
++        User newUser = UserTestUtil.getNew();
++        perform(MockMvcRequestBuilders.post(URL)
++                .contentType(MediaType.APPLICATION_JSON)
++                .content(writeValue(newUser)))
++                .andExpect(status().isCreated());
++    }
++
++    @Test
++    @WithUserDetails(value = ADMIN_MAIL)
++    void update() throws Exception {
++        User updated = UserTestUtil.getUpdated();
++        perform(MockMvcRequestBuilders.put(URL + USER_ID)
++                .contentType(MediaType.APPLICATION_JSON)
++                .content(writeValue(updated)))
++                .andExpect(status().isNoContent());
++    }
+ }
+\ No newline at end of file
+Index: src/test/java/ru/javaops/bootjava/UserTestUtil.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/bootjava/UserTestUtil.java b/src/test/java/ru/javaops/bootjava/UserTestUtil.java
+--- a/src/test/java/ru/javaops/bootjava/UserTestUtil.java	(revision 10188a9f795ad864534187e8520402e119cfec59)
++++ b/src/test/java/ru/javaops/bootjava/UserTestUtil.java	(date 1618239089369)
+@@ -1,8 +1,21 @@
+ package ru.javaops.bootjava;
+ 
++import ru.javaops.bootjava.model.Role;
++import ru.javaops.bootjava.model.User;
++
++import java.util.List;
++
+ public class UserTestUtil {
+     public static final int USER_ID = 1;
+     public static final int ADMIN_ID = 2;
+     public static final String USER_MAIL = "user@gmail.com";
+     public static final String ADMIN_MAIL = "admin@javaops.ru";
++
++    public static User getNew() {
++        return new User(null, "new@gmail.com", "New_First", "New_Last", "newpass", List.of(Role.USER));
++    }
++
++    public static User getUpdated() {
++        return new User(USER_ID, "user_update@gmail.com", "User_First_Update", "User_Last_Update", "password_update", List.of(Role.USER));
++    }
+ }
+Index: src/test/java/ru/javaops/bootjava/web/AccountControllerTest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/bootjava/web/AccountControllerTest.java b/src/test/java/ru/javaops/bootjava/web/AccountControllerTest.java
+--- a/src/test/java/ru/javaops/bootjava/web/AccountControllerTest.java	(revision 10188a9f795ad864534187e8520402e119cfec59)
++++ b/src/test/java/ru/javaops/bootjava/web/AccountControllerTest.java	(date 1618239089359)
+@@ -4,14 +4,18 @@
+ import org.junit.jupiter.api.Test;
+ import org.springframework.beans.factory.annotation.Autowired;
+ import org.springframework.hateoas.MediaTypes;
++import org.springframework.http.MediaType;
+ import org.springframework.security.test.context.support.WithUserDetails;
+ import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
++import ru.javaops.bootjava.UserTestUtil;
++import ru.javaops.bootjava.model.User;
+ import ru.javaops.bootjava.repository.UserRepository;
+ 
+ import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
+ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+ import static ru.javaops.bootjava.UserTestUtil.*;
++import static ru.javaops.bootjava.util.JsonUtil.writeValue;
+ import static ru.javaops.bootjava.web.AccountController.URL;
+ 
+ class AccountControllerTest extends AbstractControllerTest {
+@@ -42,4 +46,24 @@
+         Assertions.assertFalse(userRepository.findById(USER_ID).isPresent());
+         Assertions.assertTrue(userRepository.findById(ADMIN_ID).isPresent());
+     }
++
++    @Test
++    void register() throws Exception {
++        User newUser = UserTestUtil.getNew();
++        perform(MockMvcRequestBuilders.post(URL + "/register")
++                .contentType(MediaType.APPLICATION_JSON)
++                .content(writeValue(newUser)))
++                .andExpect(status().isCreated());
++    }
++
++    @Test
++    @WithUserDetails(value = USER_MAIL)
++    void update() throws Exception {
++        User updated = UserTestUtil.getUpdated();
++        perform(MockMvcRequestBuilders.put(URL)
++                .contentType(MediaType.APPLICATION_JSON)
++                .content(writeValue(updated)))
++                .andDo(print())
++                .andExpect(status().isNoContent());
++    }
+ }
+\ No newline at end of file
+Index: src/main/java/ru/javaops/bootjava/model/User.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/bootjava/model/User.java b/src/main/java/ru/javaops/bootjava/model/User.java
+--- a/src/main/java/ru/javaops/bootjava/model/User.java	(revision 10188a9f795ad864534187e8520402e119cfec59)
++++ b/src/main/java/ru/javaops/bootjava/model/User.java	(date 1618239089341)
+@@ -11,6 +11,8 @@
+ import javax.validation.constraints.NotEmpty;
+ import javax.validation.constraints.Size;
+ import java.io.Serializable;
++import java.util.Collection;
++import java.util.EnumSet;
+ import java.util.Set;
+ 
+ @Entity
+@@ -21,6 +23,10 @@
+ @AllArgsConstructor
+ @ToString(callSuper = true, exclude = {"password"})
+ public class User extends BaseEntity implements Serializable {
++    public User(Integer id, String email, String firstName, String lastName, String password, Collection<Role> roles) {
++        this(email, firstName, lastName, password, EnumSet.copyOf(roles));
++        this.id = id;
++    }
+ 
+     @Column(name = "email", nullable = false, unique = true)
+     @Email

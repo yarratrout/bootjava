@@ -1,0 +1,246 @@
+Index: src/test/java/ru/javaops/bootjava/RestaurantVotingApplicationTests.java
+===================================================================
+diff --git a/src/test/java/ru/javaops/bootjava/RestaurantVotingApplicationTests.java b/src/test/java/ru/javaops/bootjava/RestaurantVotingApplicationTests.java
+deleted file mode 100644
+--- a/src/test/java/ru/javaops/bootjava/RestaurantVotingApplicationTests.java	(revision 7985ad9843bcc32490f91be27cea73940f15af6b)
++++ /dev/null	(revision 7985ad9843bcc32490f91be27cea73940f15af6b)
+@@ -1,12 +0,0 @@
+-package ru.javaops.bootjava;
+-
+-import org.junit.jupiter.api.Test;
+-import org.springframework.boot.test.context.SpringBootTest;
+-
+-@SpringBootTest
+-class RestaurantVotingApplicationTests {
+-
+-	@Test
+-	void contextLoads() {
+-	}
+-}
+Index: pom.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/pom.xml b/pom.xml
+--- a/pom.xml	(revision 7985ad9843bcc32490f91be27cea73940f15af6b)
++++ b/pom.xml	(date 1618238843621)
+@@ -82,6 +82,12 @@
+             <artifactId>spring-boot-starter-test</artifactId>
+             <scope>test</scope>
+         </dependency>
++        <!--        https://www.baeldung.com/spring-security-integration-tests        -->
++        <dependency>
++            <groupId>org.springframework.security</groupId>
++            <artifactId>spring-security-test</artifactId>
++            <scope>test</scope>
++        </dependency>
+     </dependencies>
+ 
+     <build>
+Index: src/test/java/ru/javaops/bootjava/web/UserControllerTest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/bootjava/web/UserControllerTest.java b/src/test/java/ru/javaops/bootjava/web/UserControllerTest.java
+new file mode 100644
+--- /dev/null	(date 1618238555080)
++++ b/src/test/java/ru/javaops/bootjava/web/UserControllerTest.java	(date 1618238555080)
+@@ -0,0 +1,64 @@
++package ru.javaops.bootjava.web;
++
++import org.junit.jupiter.api.Assertions;
++import org.junit.jupiter.api.Test;
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.hateoas.MediaTypes;
++import org.springframework.security.test.context.support.WithUserDetails;
++import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
++import ru.javaops.bootjava.repository.UserRepository;
++
++import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
++import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
++import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
++import static ru.javaops.bootjava.UserTestUtil.*;
++
++class UserControllerTest extends AbstractControllerTest {
++    static final String URL = "/api/users/";
++
++    @Autowired
++    private UserRepository userRepository;
++
++    @Test
++    @WithUserDetails(value = ADMIN_MAIL)
++    void get() throws Exception {
++        perform(MockMvcRequestBuilders.get(URL + USER_ID))
++                .andExpect(status().isOk())
++                .andDo(print())
++                .andExpect(content().contentTypeCompatibleWith(MediaTypes.HAL_JSON_VALUE));
++    }
++
++    @Test
++    @WithUserDetails(value = ADMIN_MAIL)
++    void getAll() throws Exception {
++        perform(MockMvcRequestBuilders.get(URL))
++                .andExpect(status().isOk())
++                .andDo(print())
++                .andExpect(content().contentTypeCompatibleWith(MediaTypes.HAL_JSON_VALUE));
++    }
++
++    @Test
++    @WithUserDetails(value = ADMIN_MAIL)
++    void getByEmail() throws Exception {
++        perform(MockMvcRequestBuilders.get(URL + "search/by-email?email=" + ADMIN_MAIL))
++                .andExpect(status().isOk())
++                .andDo(print())
++                .andExpect(content().contentTypeCompatibleWith(MediaTypes.HAL_JSON_VALUE));
++    }
++
++    @Test
++    @WithUserDetails(value = USER_MAIL)
++    void getForbidden() throws Exception {
++        perform(MockMvcRequestBuilders.get(URL))
++                .andExpect(status().isForbidden());
++    }
++
++    @Test
++    @WithUserDetails(value = ADMIN_MAIL)
++    void delete() throws Exception {
++        perform(MockMvcRequestBuilders.delete(URL + USER_ID))
++                .andExpect(status().isNoContent());
++        Assertions.assertFalse(userRepository.findById(USER_ID).isPresent());
++        Assertions.assertTrue(userRepository.findById(ADMIN_ID).isPresent());
++    }
++}
+\ No newline at end of file
+Index: src/test/java/ru/javaops/bootjava/UserTestUtil.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/bootjava/UserTestUtil.java b/src/test/java/ru/javaops/bootjava/UserTestUtil.java
+new file mode 100644
+--- /dev/null	(date 1618238555090)
++++ b/src/test/java/ru/javaops/bootjava/UserTestUtil.java	(date 1618238555090)
+@@ -0,0 +1,8 @@
++package ru.javaops.bootjava;
++
++public class UserTestUtil {
++    public static final int USER_ID = 1;
++    public static final int ADMIN_ID = 2;
++    public static final String USER_MAIL = "user@gmail.com";
++    public static final String ADMIN_MAIL = "admin@javaops.ru";
++}
+Index: src/test/java/ru/javaops/bootjava/web/AbstractControllerTest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/bootjava/web/AbstractControllerTest.java b/src/test/java/ru/javaops/bootjava/web/AbstractControllerTest.java
+new file mode 100644
+--- /dev/null	(date 1618238884709)
++++ b/src/test/java/ru/javaops/bootjava/web/AbstractControllerTest.java	(date 1618238884709)
+@@ -0,0 +1,24 @@
++package ru.javaops.bootjava.web;
++
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
++import org.springframework.boot.test.context.SpringBootTest;
++import org.springframework.test.web.servlet.MockMvc;
++import org.springframework.test.web.servlet.ResultActions;
++import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
++import org.springframework.transaction.annotation.Transactional;
++
++//https://docs.spring.io/spring-boot/docs/current/reference/html/spring-boot-features.html#boot-features-testing-spring-boot-applications
++@SpringBootTest
++@Transactional
++@AutoConfigureMockMvc
++//https://docs.spring.io/spring-boot/docs/current/reference/html/spring-boot-features.html#boot-features-testing-spring-boot-applications-testing-with-mock-environment
++public abstract class AbstractControllerTest {
++
++    @Autowired
++    protected MockMvc mockMvc;
++
++    protected ResultActions perform(MockHttpServletRequestBuilder builder) throws Exception {
++        return mockMvc.perform(builder);
++    }
++}
+Index: src/main/java/ru/javaops/bootjava/web/AccountController.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/bootjava/web/AccountController.java b/src/main/java/ru/javaops/bootjava/web/AccountController.java
+--- a/src/main/java/ru/javaops/bootjava/web/AccountController.java	(revision 7985ad9843bcc32490f91be27cea73940f15af6b)
++++ b/src/main/java/ru/javaops/bootjava/web/AccountController.java	(date 1618238843604)
+@@ -36,11 +36,13 @@
+  * RequestMapping("/${spring.data.rest.basePath}/account") give "Not enough variable values"
+  */
+ @RestController
+-@RequestMapping("/api/account")
++@RequestMapping(AccountController.URL)
+ @AllArgsConstructor
+ @Slf4j
+ @Tag(name = "Account Controller")
+ public class AccountController implements RepresentationModelProcessor<RepositoryLinksResource> {
++    static final String URL = "/api/account";
++
+     @SuppressWarnings("unchecked")
+     private static final RepresentationModelAssemblerSupport<User, EntityModel<User>> ASSEMBLER =
+             new RepresentationModelAssemblerSupport<>(AccountController.class, (Class<EntityModel<User>>) (Class<?>) EntityModel.class) {
+Index: src/test/java/ru/javaops/bootjava/web/AccountControllerTest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/bootjava/web/AccountControllerTest.java b/src/test/java/ru/javaops/bootjava/web/AccountControllerTest.java
+new file mode 100644
+--- /dev/null	(date 1618238555075)
++++ b/src/test/java/ru/javaops/bootjava/web/AccountControllerTest.java	(date 1618238555075)
+@@ -0,0 +1,45 @@
++package ru.javaops.bootjava.web;
++
++import org.junit.jupiter.api.Assertions;
++import org.junit.jupiter.api.Test;
++import org.springframework.beans.factory.annotation.Autowired;
++import org.springframework.hateoas.MediaTypes;
++import org.springframework.security.test.context.support.WithUserDetails;
++import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
++import ru.javaops.bootjava.repository.UserRepository;
++
++import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
++import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
++import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
++import static ru.javaops.bootjava.UserTestUtil.*;
++import static ru.javaops.bootjava.web.AccountController.URL;
++
++class AccountControllerTest extends AbstractControllerTest {
++
++    @Autowired
++    private UserRepository userRepository;
++
++    @Test
++    @WithUserDetails(value = USER_MAIL)
++    void get() throws Exception {
++        perform(MockMvcRequestBuilders.get(URL))
++                .andExpect(status().isOk())
++                .andDo(print())
++                .andExpect(content().contentTypeCompatibleWith(MediaTypes.HAL_JSON_VALUE));
++    }
++
++    @Test
++    void getUnAuth() throws Exception {
++        perform(MockMvcRequestBuilders.get(URL))
++                .andExpect(status().isUnauthorized());
++    }
++
++    @Test
++    @WithUserDetails(value = USER_MAIL)
++    void delete() throws Exception {
++        perform(MockMvcRequestBuilders.delete(URL))
++                .andExpect(status().isNoContent());
++        Assertions.assertFalse(userRepository.findById(USER_ID).isPresent());
++        Assertions.assertTrue(userRepository.findById(ADMIN_ID).isPresent());
++    }
++}
+\ No newline at end of file

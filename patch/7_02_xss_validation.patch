@@ -1,0 +1,137 @@
+Index: src/test/java/ru/javaops/bootjava/web/AccountControllerTest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/bootjava/web/AccountControllerTest.java b/src/test/java/ru/javaops/bootjava/web/AccountControllerTest.java
+--- a/src/test/java/ru/javaops/bootjava/web/AccountControllerTest.java	(revision 921012c9833d7d8cd4b9103d7520665279d2e141)
++++ b/src/test/java/ru/javaops/bootjava/web/AccountControllerTest.java	(date 1639172356791)
+@@ -69,4 +69,16 @@
+                 .andExpect(status().isNoContent());
+         UserTestUtil.assertEquals(updated, userRepository.findById(USER_ID).orElseThrow());
+     }
++
++    @Test
++    @WithUserDetails(value = USER_MAIL)
++    void updateHtmlUnsafe() throws Exception {
++        User updated = UserTestUtil.getUpdated();
++        updated.setFirstName("<script>alert(123)</script>");
++        perform(MockMvcRequestBuilders.put(URL)
++                .contentType(MediaType.APPLICATION_JSON)
++                .content(writeValue(updated)))
++                .andDo(print())
++                .andExpect(status().isUnprocessableEntity());
++    }
+ }
+\ No newline at end of file
+Index: pom.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/pom.xml b/pom.xml
+--- a/pom.xml	(revision 921012c9833d7d8cd4b9103d7520665279d2e141)
++++ b/pom.xml	(date 1639172356781)
+@@ -80,6 +80,11 @@
+             <artifactId>lombok</artifactId>
+             <optional>true</optional>
+         </dependency>
++        <dependency>
++            <groupId>org.jsoup</groupId>
++            <artifactId>jsoup</artifactId>
++            <version>1.14.3</version>
++        </dependency>
+ 
+         <!--    https://github.com/spring-projects/spring-boot/wiki/Spring-Boot-2.4-Release-Notes#junit-5s-vintage-engine-removed-from-spring-boot-starter-test-->
+         <dependency>
+Index: src/main/java/ru/javaops/bootjava/util/validation/NoHtmlValidator.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/bootjava/util/validation/NoHtmlValidator.java b/src/main/java/ru/javaops/bootjava/util/validation/NoHtmlValidator.java
+new file mode 100644
+--- /dev/null	(date 1639172685015)
++++ b/src/main/java/ru/javaops/bootjava/util/validation/NoHtmlValidator.java	(date 1639172685015)
+@@ -0,0 +1,14 @@
++package ru.javaops.bootjava.util.validation;
++
++import org.jsoup.Jsoup;
++import org.jsoup.safety.Safelist;
++
++import javax.validation.ConstraintValidator;
++import javax.validation.ConstraintValidatorContext;
++
++public class NoHtmlValidator implements ConstraintValidator<NoHtml, String> {
++    @Override
++    public boolean isValid(String value, ConstraintValidatorContext ctx) {
++        return value == null || Jsoup.isValid(value, Safelist.none());
++    }
++}
+Index: src/main/java/ru/javaops/bootjava/util/validation/NoHtml.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/bootjava/util/validation/NoHtml.java b/src/main/java/ru/javaops/bootjava/util/validation/NoHtml.java
+new file mode 100644
+--- /dev/null	(date 1638558512661)
++++ b/src/main/java/ru/javaops/bootjava/util/validation/NoHtml.java	(date 1638558512661)
+@@ -0,0 +1,23 @@
++package ru.javaops.bootjava.util.validation;
++
++import javax.validation.Constraint;
++import javax.validation.Payload;
++import java.lang.annotation.Documented;
++import java.lang.annotation.Retention;
++import java.lang.annotation.Target;
++
++import static java.lang.annotation.ElementType.FIELD;
++import static java.lang.annotation.ElementType.METHOD;
++import static java.lang.annotation.RetentionPolicy.RUNTIME;
++
++@Documented
++@Constraint(validatedBy = NoHtmlValidator.class)
++@Target({METHOD, FIELD})
++@Retention(RUNTIME)
++public @interface NoHtml {
++    String message() default "{error.noHtml}";
++
++    Class<?>[] groups() default {};
++
++    Class<? extends Payload>[] payload() default {};
++}
+Index: src/main/java/ru/javaops/bootjava/model/User.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/main/java/ru/javaops/bootjava/model/User.java b/src/main/java/ru/javaops/bootjava/model/User.java
+--- a/src/main/java/ru/javaops/bootjava/model/User.java	(revision 921012c9833d7d8cd4b9103d7520665279d2e141)
++++ b/src/main/java/ru/javaops/bootjava/model/User.java	(date 1639172356787)
+@@ -5,6 +5,7 @@
+ import lombok.*;
+ import org.springframework.util.StringUtils;
+ import ru.javaops.bootjava.util.JsonDeserializers;
++import ru.javaops.bootjava.util.validation.NoHtml;
+ 
+ import javax.persistence.*;
+ import javax.validation.constraints.Email;
+@@ -32,14 +33,17 @@
+     @Email
+     @NotBlank
+     @Size(max = 128)
++    @NoHtml   // https://stackoverflow.com/questions/17480809
+     private String email;
+ 
+     @Column(name = "first_name")
+     @Size(max = 128)
++    @NoHtml
+     private String firstName;
+ 
+     @Column(name = "last_name")
+     @Size(max = 128)
++    @NoHtml
+     private String lastName;
+ 
+     @Column(name = "password")

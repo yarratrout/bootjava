@@ -1,0 +1,152 @@
+Index: src/test/java/ru/javaops/bootjava/web/UserControllerTest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/bootjava/web/UserControllerTest.java b/src/test/java/ru/javaops/bootjava/web/UserControllerTest.java
+--- a/src/test/java/ru/javaops/bootjava/web/UserControllerTest.java	(revision 24400efd454541ac73b52233cdab2565bd12f0b1)
++++ b/src/test/java/ru/javaops/bootjava/web/UserControllerTest.java	(date 1618188669468)
+@@ -29,12 +29,14 @@
+         perform(MockMvcRequestBuilders.get(URL + USER_ID))
+                 .andExpect(status().isOk())
+                 .andDo(print())
+-                .andExpect(content().contentTypeCompatibleWith(MediaTypes.HAL_JSON_VALUE));
++                .andExpect(content().contentTypeCompatibleWith(MediaTypes.HAL_JSON_VALUE))
++                .andExpect(jsonMatcher(user, UserTestUtil::assertNoIdEquals));
+     }
+ 
+     @Test
+     @WithUserDetails(value = ADMIN_MAIL)
+     void getAll() throws Exception {
++        // TODO check content yourself
+         perform(MockMvcRequestBuilders.get(URL))
+                 .andExpect(status().isOk())
+                 .andDo(print())
+@@ -47,7 +49,8 @@
+         perform(MockMvcRequestBuilders.get(URL + "search/by-email?email=" + ADMIN_MAIL))
+                 .andExpect(status().isOk())
+                 .andDo(print())
+-                .andExpect(content().contentTypeCompatibleWith(MediaTypes.HAL_JSON_VALUE));
++                .andExpect(content().contentTypeCompatibleWith(MediaTypes.HAL_JSON_VALUE))
++                .andExpect(jsonMatcher(admin, UserTestUtil::assertNoIdEquals));
+     }
+ 
+     @Test
+@@ -73,7 +76,8 @@
+         perform(MockMvcRequestBuilders.post(URL)
+                 .contentType(MediaType.APPLICATION_JSON)
+                 .content(writeValue(newUser)))
+-                .andExpect(status().isCreated());
++                .andExpect(status().isCreated())
++                .andExpect(jsonMatcher(newUser, UserTestUtil::assertNoIdEquals));
+     }
+ 
+     @Test
+@@ -84,5 +88,6 @@
+                 .contentType(MediaType.APPLICATION_JSON)
+                 .content(writeValue(updated)))
+                 .andExpect(status().isNoContent());
++        UserTestUtil.assertEquals(updated, userRepository.findById(USER_ID).orElseThrow());
+     }
+ }
+\ No newline at end of file
+Index: src/test/java/ru/javaops/bootjava/UserTestUtil.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/bootjava/UserTestUtil.java b/src/test/java/ru/javaops/bootjava/UserTestUtil.java
+--- a/src/test/java/ru/javaops/bootjava/UserTestUtil.java	(revision 24400efd454541ac73b52233cdab2565bd12f0b1)
++++ b/src/test/java/ru/javaops/bootjava/UserTestUtil.java	(date 1618212524940)
+@@ -1,15 +1,25 @@
+ package ru.javaops.bootjava;
+ 
++import com.fasterxml.jackson.core.JsonProcessingException;
++import org.springframework.test.web.servlet.MvcResult;
++import org.springframework.test.web.servlet.ResultMatcher;
+ import ru.javaops.bootjava.model.Role;
+ import ru.javaops.bootjava.model.User;
++import ru.javaops.bootjava.util.JsonUtil;
+ 
++import java.io.UnsupportedEncodingException;
+ import java.util.List;
++import java.util.function.BiConsumer;
++
++import static org.assertj.core.api.Assertions.assertThat;
+ 
+ public class UserTestUtil {
+     public static final int USER_ID = 1;
+     public static final int ADMIN_ID = 2;
+     public static final String USER_MAIL = "user@gmail.com";
+     public static final String ADMIN_MAIL = "admin@javaops.ru";
++    public static final User user = new User(USER_ID, USER_MAIL, "User_First", "User_Last", "password", List.of(Role.USER));
++    public static final User admin = new User(ADMIN_ID, ADMIN_MAIL, "Admin_First", "Admin_Last", "admin", List.of(Role.ADMIN, Role.USER));
+ 
+     public static User getNew() {
+         return new User(null, "new@gmail.com", "New_First", "New_Last", "newpass", List.of(Role.USER));
+@@ -18,4 +28,22 @@
+     public static User getUpdated() {
+         return new User(USER_ID, "user_update@gmail.com", "User_First_Update", "User_Last_Update", "password_update", List.of(Role.USER));
+     }
++
++    public static void assertEquals(User actual, User expected) {
++        assertThat(actual).usingRecursiveComparison().ignoringFields("password").isEqualTo(expected);
++    }
++
++    // No id in HATEOAS answer
++    public static void assertNoIdEquals(User actual, User expected) {
++        assertThat(actual).usingRecursiveComparison().ignoringFields("id", "password").isEqualTo(expected);
++    }
++
++    public static User asUser(MvcResult mvcResult) throws UnsupportedEncodingException, JsonProcessingException {
++        String jsonActual = mvcResult.getResponse().getContentAsString();
++        return JsonUtil.readValue(jsonActual, User.class);
++    }
++
++    public static ResultMatcher jsonMatcher(User expected, BiConsumer<User, User> equalsAssertion) {
++        return mvcResult -> equalsAssertion.accept(asUser(mvcResult), expected);
++    }
+ }
+Index: src/test/java/ru/javaops/bootjava/web/AccountControllerTest.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/src/test/java/ru/javaops/bootjava/web/AccountControllerTest.java b/src/test/java/ru/javaops/bootjava/web/AccountControllerTest.java
+--- a/src/test/java/ru/javaops/bootjava/web/AccountControllerTest.java	(revision 24400efd454541ac73b52233cdab2565bd12f0b1)
++++ b/src/test/java/ru/javaops/bootjava/web/AccountControllerTest.java	(date 1618167196023)
+@@ -29,7 +29,8 @@
+         perform(MockMvcRequestBuilders.get(URL))
+                 .andExpect(status().isOk())
+                 .andDo(print())
+-                .andExpect(content().contentTypeCompatibleWith(MediaTypes.HAL_JSON_VALUE));
++                .andExpect(content().contentTypeCompatibleWith(MediaTypes.HAL_JSON_VALUE))
++                .andExpect(jsonMatcher(user, UserTestUtil::assertEquals));
+     }
+ 
+     @Test
+@@ -50,10 +51,14 @@
+     @Test
+     void register() throws Exception {
+         User newUser = UserTestUtil.getNew();
+-        perform(MockMvcRequestBuilders.post(URL + "/register")
++        User registered = asUser(perform(MockMvcRequestBuilders.post(URL + "/register")
+                 .contentType(MediaType.APPLICATION_JSON)
+                 .content(writeValue(newUser)))
+-                .andExpect(status().isCreated());
++                .andExpect(status().isCreated()).andReturn());
++        int newId = registered.id();
++        newUser.setId(newId);
++        UserTestUtil.assertEquals(registered, newUser);
++        UserTestUtil.assertEquals(registered, userRepository.findById(newId).orElseThrow());
+     }
+ 
+     @Test
+@@ -65,5 +70,6 @@
+                 .content(writeValue(updated)))
+                 .andDo(print())
+                 .andExpect(status().isNoContent());
++        UserTestUtil.assertEquals(updated, userRepository.findById(USER_ID).orElseThrow());
+     }
+ }
+\ No newline at end of file
